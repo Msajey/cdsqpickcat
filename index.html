@@ -11,71 +11,100 @@
             background-color: #f7f7f7;
             height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             font-family: sans-serif;
         }
-        #container {
-            width: 100%;
+        #msg-container {
+            text-align: center;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
         #msg {
-            color: #ff4d4f;
+            color: #666;
+            font-size: 15px;
+            margin-bottom: 20px;
+        }
+        /* 刷新按钮的样式 */
+        #refresh-btn {
+            padding: 10px 24px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
             font-size: 14px;
-            text-align: center;
-            padding: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+        }
+        #captcha-element {
+            /* 验证码渲染容器 */
+            display: flex;
+            justify-content: center;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="msg">正在加载验证组件，请稍候...</div>
-        <div id="captcha-element"></div>
+
+    <!-- 提示和刷新容器 -->
+    <div id="msg-container">
+        <div id="msg">正在加载安全验证组件，请稍候...</div>
+        <!-- 这个按钮既用来手动刷新，也直接绑定给阿里云作为触发按钮 -->
+        <button id="refresh-btn" style="display:none;" onclick="location.reload()">加载慢？点击刷新</button>
     </div>
     
-    <!-- 这是一个隐藏的按钮，阿里云验证码初始化需要它 -->
-    <button id="btn" style="display:none;">验证</button>
+    <div id="captcha-element"></div>
 
-    <!-- 阿里云官方验证码 JS -->
+    <!-- 引入阿里云官方 JS -->
     <script src="https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js"></script>
     
     <script>
         window.onload = function() {
             var msg = document.getElementById('msg');
+            var refreshBtn = document.getElementById('refresh-btn');
             
-            // 1. 检查 JS 是否成功加载
+            // 如果 3 秒后验证码还没出来，就显示刷新按钮
+            var timeoutTimer = setTimeout(function() {
+                msg.innerText = '加载时间较长，可能是网络问题或组件异常。';
+                refreshBtn.style.display = 'block';
+            }, 3000);
+
+            // 检查 JS 是否加载成功
             if (typeof initAliyunCaptcha === 'undefined') {
+                clearTimeout(timeoutTimer);
                 msg.innerText = '【错误】阿里云 JS 加载失败，请检查网络。';
+                refreshBtn.style.display = 'block';
                 return;
             }
 
-            msg.style.display = 'none';
-
-            // 2. 初始化验证码
             try {
                 initAliyunCaptcha({
                     SceneId: "1icer78a",
                     prefix: "1rbwn", 
-                    button: "#btn",
+                    button: "#refresh-btn", // 【核心】直接把刷新按钮绑给阿里云
                     captchaVerifyCallback: function(captchaVerifyParam) {
-                        
-                        // 3. 验证成功！直接把这个参数塞给原生 App
+                        // 验证成功，把参数交给原生
                         if (window.AndroidBridge) {
-                            // 注意：这里只传了验证码，因为账号密码原生已经在内存里了
                             window.AndroidBridge.onLoginData(captchaVerifyParam);
                         } else {
-                            msg.innerText = '【错误】未检测到 App 环境。';
-                            msg.style.display = 'block';
+                            msg.innerText = '验证成功！但未检测到 App 环境。';
+                            refreshBtn.style.display = 'none';
                         }
-                        
                         return { captchaResult: true };
                     }
                 });
+
+                // 初始化成功，清掉超时提示，隐藏按钮
+                clearTimeout(timeoutTimer);
+                msg.innerText = '请拖动下方滑块完成验证';
+                // 因为验证码出来了，就不需要手动刷新按钮了
+                refreshBtn.style.display = 'none';
+
             } catch(e) {
+                clearTimeout(timeoutTimer);
                 msg.innerText = '【初始化失败】' + e.message;
-                msg.style.display = 'block';
+                refreshBtn.style.display = 'block';
             }
         };
     </script>
