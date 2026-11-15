@@ -1,110 +1,92 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>安全验证</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿里云安全验证</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #f7f7f7;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            font-family: sans-serif;
+        body { margin: 0; background-color: #f7f7f7; font-family: sans-serif; }
+        #tip-box { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; width: 80%; padding: 20px; background: white; 
+            border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); word-wrap: break-word;
         }
-        #msg-container {
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        #msg {
-            color: #666;
-            font-size: 15px;
-            margin-bottom: 20px;
-        }
-        /* 刷新按钮的样式 */
-        #refresh-btn {
-            padding: 10px 24px;
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
-        }
-        #captcha-element {
-            /* 验证码渲染容器 */
-            display: flex;
-            justify-content: center;
-        }
+        .success { color: #2ecc71; }
+        .error { color: #e74c3c; }
+        .info { color: #3498db; }
     </style>
 </head>
 <body>
-
-    <!-- 提示和刷新容器 -->
-    <div id="msg-container">
-        <div id="msg">正在加载安全验证组件，请稍候...</div>
-        <!-- 这个按钮既用来手动刷新，也直接绑定给阿里云作为触发按钮 -->
-        <button id="refresh-btn" style="display:none;" onclick="location.reload()">加载慢？点击刷新</button>
+    <div id="tip-box">
+        <h2 id="status-text" class="info">正在加载验证组件...</h2>
+        <p id="detail-text" style="color: #666; font-size: 14px;"></p>
     </div>
-    
-    <div id="captcha-element"></div>
 
-    <!-- 引入阿里云官方 JS -->
-    <script src="https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js"></script>
-    
+    <!-- 隐藏的验证码容器和触发按钮 -->
+    <div id="captcha-element" style="display: none;"></div>
+    <button id="trigger-btn" style="display: none;">触发</button>
+
     <script>
-        window.onload = function() {
-            var msg = document.getElementById('msg');
-            var refreshBtn = document.getElementById('refresh-btn');
-            
-            // 如果 3 秒后验证码还没出来，就显示刷新按钮
-            var timeoutTimer = setTimeout(function() {
-                msg.innerText = '加载时间较长，可能是网络问题或组件异常。';
-                refreshBtn.style.display = 'block';
-            }, 3000);
+        window.AliyunCaptchaConfig = {
+            region: "cn",
+            prefix: "1rbvwn"
+        };
+    </script>
+    <script src="https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js"></script>
 
-            // 检查 JS 是否加载成功
-            if (typeof initAliyunCaptcha === 'undefined') {
-                clearTimeout(timeoutTimer);
-                msg.innerText = '【错误】阿里云 JS 加载失败，请检查网络。';
-                refreshBtn.style.display = 'block';
+    <script>
+        const statusText = document.getElementById('status-text');
+        const detailText = document.getElementById('detail-text');
+
+        function updateTip(status, detail, type) {
+            statusText.innerText = status;
+            statusText.className = type;
+            detailText.innerText = detail;
+            // 同时尝试给原生发日志
+            if (window.AndroidBridge && window.AndroidBridge.onLog) {
+                window.AndroidBridge.onLog("[" + type + "] " + status + " - " + detail);
+            }
+        }
+
+        window.onload = function() {
+            updateTip("组件已加载，准备启动", "正在初始化阿里云...", "info");
+
+            // 如果阿里云 JS 没加载出来
+            if (typeof window.initAliyunCaptcha === 'undefined') {
+                updateTip("初始化失败", "AliyunCaptcha.js 未加载成功，请检查网络！", "error");
                 return;
             }
 
             try {
-                initAliyunCaptcha({
+                window.initAliyunCaptcha({
                     SceneId: "1icer78a",
-                    prefix: "1rbwn", 
-                    button: "#refresh-btn", // 【核心】直接把刷新按钮绑给阿里云
-                    captchaVerifyCallback: function(captchaVerifyParam) {
-                        // 验证成功，把参数交给原生
-                        if (window.AndroidBridge) {
+                    mode: "popup",
+                    element: "#captcha-element",
+                    button: "#trigger-btn",
+                    success: function (captchaVerifyParam) {
+                        updateTip("验证成功！", "已获取到参数，准备传给原生...", "success");
+                        
+                        if (window.AndroidBridge && window.AndroidBridge.onLoginData) {
                             window.AndroidBridge.onLoginData(captchaVerifyParam);
                         } else {
-                            msg.innerText = '验证成功！但未检测到 App 环境。';
-                            refreshBtn.style.display = 'none';
+                            updateTip("验证成功，但桥接断开", "请检查 AndroidBridge 是否注入！", "error");
                         }
-                        return { captchaResult: true };
+                    },
+                    fail: function (error) {
+                        updateTip("验证被拒绝", "阿里云返回错误: " + JSON.stringify(error), "error");
+                    },
+                    getInstance: function (instance) {
+                        updateTip("开始静默验证", "正在向阿里云请求无痕验证...", "info");
+                        
+                        if (instance && instance.startTracelessVerification) {
+                            instance.startTracelessVerification();
+                        } else {
+                            updateTip("无痕验证不支持", "当前场景未开启无痕模式或 JS 版本不支持 API。", "error");
+                        }
                     }
                 });
-
-                // 初始化成功，清掉超时提示，隐藏按钮
-                clearTimeout(timeoutTimer);
-                msg.innerText = '请拖动下方滑块完成验证';
-                // 因为验证码出来了，就不需要手动刷新按钮了
-                refreshBtn.style.display = 'none';
-
-            } catch(e) {
-                clearTimeout(timeoutTimer);
-                msg.innerText = '【初始化失败】' + e.message;
-                refreshBtn.style.display = 'block';
+            } catch (e) {
+                updateTip("初始化异常", e.message, "error");
             }
         };
     </script>
