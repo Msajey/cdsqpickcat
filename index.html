@@ -22,7 +22,6 @@
         <p id="detail-text" style="color: #666; font-size: 14px;"></p>
     </div>
 
-    <!-- 隐藏的验证码容器和触发按钮 -->
     <div id="captcha-element" style="display: none;"></div>
     <button id="trigger-btn" style="display: none;">触发</button>
 
@@ -42,7 +41,6 @@
             statusText.innerText = status;
             statusText.className = type;
             detailText.innerText = detail;
-            // 同时尝试给原生发日志
             if (window.AndroidBridge && window.AndroidBridge.onLog) {
                 window.AndroidBridge.onLog("[" + type + "] " + status + " - " + detail);
             }
@@ -51,7 +49,6 @@
         window.onload = function() {
             updateTip("组件已加载，准备启动", "正在初始化阿里云...", "info");
 
-            // 如果阿里云 JS 没加载出来
             if (typeof window.initAliyunCaptcha === 'undefined') {
                 updateTip("初始化失败", "AliyunCaptcha.js 未加载成功，请检查网络！", "error");
                 return;
@@ -64,24 +61,23 @@
                     element: "#captcha-element",
                     button: "#trigger-btn",
                     success: function (captchaVerifyParam) {
-                        updateTip("验证成功！", "已获取到参数，准备传给原生...", "success");
+                        updateTip("验证成功！", "已获取到参数，正在发送给原生...", "success");
                         
                         if (window.AndroidBridge && window.AndroidBridge.onLoginData) {
                             window.AndroidBridge.onLoginData(captchaVerifyParam);
                         } else {
-                            updateTip("验证成功，但桥接断开", "请检查 AndroidBridge 是否注入！", "error");
+                            updateTip("致命错误：桥接未注入", "请检查原生 addJavascriptInterface", "error");
                         }
                     },
                     fail: function (error) {
-                        updateTip("验证被拒绝", "阿里云返回错误: " + JSON.stringify(error), "error");
+                        updateTip("验证被拒绝", "阿里云错误: " + JSON.stringify(error), "error");
                     },
                     getInstance: function (instance) {
-                        updateTip("开始静默验证", "正在向阿里云请求无痕验证...", "info");
-                        
+                        updateTip("开始静默验证", "向阿里云请求无痕验证...", "info");
                         if (instance && instance.startTracelessVerification) {
                             instance.startTracelessVerification();
                         } else {
-                            updateTip("无痕验证不支持", "当前场景未开启无痕模式或 JS 版本不支持 API。", "error");
+                            updateTip("无痕验证不支持", "未开启无痕模式或 JS 版本不支持。", "error");
                         }
                     }
                 });
